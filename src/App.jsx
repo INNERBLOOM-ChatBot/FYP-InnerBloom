@@ -20,22 +20,26 @@ function App() {
   return (
     <div className="App">
       <Routes>
-        <Route path="/" element={ <Home/>}/>
-        <Route path="/general" element={<GeneralModule />} />
-        <Route path="/about" element={ <About/>}/>
-        <Route path="/service" element={ <Service/>}/>
-        <Route path="/howitworks" element={ <HowItWorks/>}/>
-        <Route path="/signup" element={ <SignUp/>}/>
-        <Route path="/signin" element={ <SignIn/>}/>
-        <Route path="/chat" element={ <MainChatbot/>}/>
-        <Route path="/general" element={ <GeneralModule/>}/>
-        <Route path="/anxiety" element={ <AnxietyModule/>}/>
-        <Route path="/depression" element={ <DepressionModule/>}/>
-        <Route path="/ocd" element={ <OCDModule/>}/>
-        <Route path="/bipolar" element={ <BipolarModule/>}/>
-        <Route path="/phobias" element={ <PhobiasModule/>}/>
+        <Route path="/" element={<Home />} />
 
-        <Route path="*" element={<NotFound />} />
+  <Route path="general" element={<GeneralModule />} />
+  <Route path="about" element={<About />} />
+  <Route path="service" element={<Service />} />
+  <Route path="howitworks" element={<HowItWorks />} />
+  <Route path="signup" element={<SignUp />} />
+  <Route path="signin" element={<SignIn />} />
+  <Route path="chat" element={<MainChatbot />} />
+
+  {/* Specialized Modules */}
+  <Route path="anxiety" element={<AnxietyModule />} />
+  <Route path="depression" element={<DepressionModule />} />
+  <Route path="ocd" element={<OCDModule />} />
+  <Route path="bipolar" element={<BipolarModule />} />
+  <Route path="phobias" element={<PhobiasModule />} />
+
+  {/* 404 Page */}
+  <Route path="*" element={<NotFound />} />
+
         
        
        
