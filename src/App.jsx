@@ -21,6 +21,7 @@ function App() {
     <div className="App">
       <Routes>
         <Route path="/" element={ <Home/>}/>
+        <Route path="/general" element={<GeneralModule />} />
         <Route path="/about" element={ <About/>}/>
         <Route path="/service" element={ <Service/>}/>
         <Route path="/howitworks" element={ <HowItWorks/>}/>
@@ -33,6 +34,8 @@ function App() {
         <Route path="/ocd" element={ <OCDModule/>}/>
         <Route path="/bipolar" element={ <BipolarModule/>}/>
         <Route path="/phobias" element={ <PhobiasModule/>}/>
+
+        <Route path="*" element={<NotFound />} />
         
        
        
