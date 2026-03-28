@@ -6,7 +6,9 @@ const WhyChoose = (prop) => {
   return (
     <section className="why-choose-section"> 
       <h2 className="why-choose-header">Why Choose InnerBloom?</h2> 
-      <p className="why-choose-subheader">Your trusted AI companion for mental wellness – safe, smart, and always here for you.</p> 
+      <p className="why-choose-subheader">AI-Powered Conversations: Talk naturally through text or voice – our empathetic AI listens, understands your emotions and responds with kindness.
+Complete Privacy: Your conversations are fully encrypted and confidential. We follow strict privacy standards – your safe space is truly yours.
+</p> 
       
       <div className="grid"> 
         {features.map((feature, index) => ( 

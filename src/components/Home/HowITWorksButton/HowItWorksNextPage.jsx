@@ -25,8 +25,7 @@ const HowItWorksNextPage = () => {
               InnerBloom is designed to meet you exactly where you are. No complicated forms, no judgment — 
               just a safe, private space powered by empathetic AI. Whether you're feeling overwhelmed, 
               curious, or ready for deeper support, we guide you gently every step of the way using 
-              evidence-based techniques like Cognitive Behavioral Therapy (CBT). Everything is 
-              confidential, available 24/7, and tailored to you.
+              evidence-based techniques. Everything is confidential, available 24/7, and tailored to you.
             </p>
      
       {/* ── 3 STEPS TIMELINE / CARDS ── */}
@@ -46,10 +45,6 @@ const HowItWorksNextPage = () => {
                 (hands-free when you need it). No pressure to explain everything at once. Just type 
                 or speak naturally, like talking to a caring friend.
               </p>
-              <div className="behind-scenes">
-                <strong>Behind the scenes:</strong> Our advanced Natural Language Processing (NLP) 
-                listens carefully and begins to understand your emotional state in real time.
-              </div>
             </div>
 
             {/* Step 2 */}

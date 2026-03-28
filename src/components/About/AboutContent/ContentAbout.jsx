@@ -17,21 +17,18 @@ const ContentAbout = (props) => {
         <div className="about-card story-card">
           <h2>Our Story</h2>
           <p>
-            InnerBloom is an open-source, AI-driven mental health platform. Born from the recognition of rising mental health issues – affecting over one billion people globally, including 50 million in Pakistan – our platform addresses barriers like stigma, high costs, and limited access to professionals.
+            InnerBloom is free 
           </p>
           <p>
-            Inspired by real-world hospital referral systems, InnerBloom combines cutting-edge AI with evidence-based therapies to offer scalable, stigma-free support. Launched in December 2025, we aim to make mental health care inclusive, engaging, and effective for everyone.
-          </p> 
+            Inspired by real-world hospital referral systems, InnerBloom combines cutting-edge AI with evidence-based therapies to offer scalable, stigma-free support. We aim to make mental health care inclusive, engaging, and effective for everyone.
+      </p>
       </div>
       
       {/* Our Mission */}
         <div className="about-card mission-card">
           <h2>Our Mission</h2>
           <p>
-            To create a secure, scalable AI companion that provides personalized, evidence-based mental health guidance. By leveraging a two-tier architecture, we ensure users receive the right support – from general emotional check-ins to specialized therapeutic modules.
-          </p>
-          <p>
-            Our goals include enhancing NLP for accurate assessments, integrating 3D animations for interactive exercises, and upholding strict ethical standards to complement, not replace, professional care.
+            Our mission is to break barriers around mental health by making support available to anyone, anytime. InnerBloom aims to reduce stigma and offer a trusted space for emotional support and self-reflection.
           </p>
         </div>
 
@@ -39,7 +36,10 @@ const ContentAbout = (props) => {
         <div className="about-card standout-card">
           <h2>Why We Stand Out</h2>
           <p>
-            Unlike generic chatbots, InnerBloom features intelligent routing, condition-specific CBT protocols, and high-quality 3D exercises. We're committed to open-source principles for community contributions, multilingual accessibility, and compliance with global privacy standards like HIPAA equivalents.
+            Unlike generic chatbots, InnerBloom features intelligent routing, condition-specific treatment, and high-quality 3D exercises. 
+          </p>
+          <p>
+          We're committed to open-source principles for community contributions, multilingual accessibility, and compliance with global privacy standards like HIPAA equivalents.
           </p>
         </div>
 
@@ -55,12 +55,13 @@ const ContentAbout = (props) => {
             <div className="value-card">
               <FaLightbulb className="value-icon" />
               <h3>Innovation</h3>
-              <p>Continuous improvement through Agile methodology.</p>
+              <p>Continuously improve to deliver a better experience for our users.</p>
             </div>
             <div className="value-card">
               <FaShieldAlt className="value-icon" />
               <h3>Integrity</h3>
-              <p>Transparent disclaimers and ethical AI use.</p>
+              <p>We are transparent, honest, and committed to responsible use of AI.
+</p>
             </div>
             <div className="value-card">
               <FaGlobe className="value-icon" />

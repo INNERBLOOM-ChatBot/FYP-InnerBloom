@@ -23,12 +23,12 @@ const ServicesContent = () => {
             <p className="module-overview">
               The foundation of InnerBloom — your compassionate first point of contact.
             </p>
-            <ul className="module-features">
-              <li>Text or voice input for natural conversations</li>
-              <li>Real-time sentiment & emotional analysis (advanced NLP)</li>
-              <li>CBT, mindfulness, positive psychology & emotional validation techniques</li>
-              <li>Supportive dialogues, coping strategies & basic exercises</li>
-              <li>Smart context retention when routing to specialized modules</li>
+             <ul className="module-features">
+              <li>Allows users to communicate through text or voice in a natural way</li>
+              <li>Understands user feelings during conversations and responds accordingly</li>
+              <li>Provides guidance based on well-known mental wellness practices</li>
+              <li>Offers supportive conversations, helpful tips, and simple exercises to manage emotions</li>
+              <li>Remembers the context of the conversation to give more relevant and connected responses</li>
             </ul>
             <p className="module-benefits">
               <strong>Best for:</strong> Everyday stress, uncertainty, or stigma-free starting point — available 24/7.
