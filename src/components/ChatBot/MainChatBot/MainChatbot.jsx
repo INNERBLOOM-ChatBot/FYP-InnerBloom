@@ -8,6 +8,7 @@ import OCDModule from '../modules/SpecializedModule/OCDModule';
 import PhobiasModule from '../modules/SpecializedModule/PhobiasModule';
 import MoodTracker from '../MoodTacking/MoodTracker';
 import ExercisePlayer from '../Exercises/ExercisePlayer';
+import config from '/src/config.js';
 
 const modules = {
   general: GeneralModule,
@@ -50,13 +51,23 @@ const MainChatbot = () => {
   };
 
   useEffect(() => {
-    const savedChats = JSON.parse(localStorage.getItem('chats')) || [];
-    setChats(savedChats);
+    fetchChats();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('chats', JSON.stringify(chats));
-  }, [chats]);
+  const fetchChats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${config.API_BASE_URL}/api/chats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to load chats');
+      const data = await res.json();
+      setChats(data);
+    } catch (error) {
+      console.error('Failed to fetch chats:', error);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,30 +77,79 @@ const MainChatbot = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = (text = input) => {
+  const speak = (text) => {
+    if (synth && text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      synth.speak(utterance);
+    }
+  };
+
+  const handleSend = async (text = input) => {
     if (!text.trim()) return;
 
     const userMsg = { text, sender: 'user' };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    updateChatHistory(newMessages);
+    let currentMsgs = [...messages, userMsg];
     setInput('');
 
-    // Check symptoms only in general module
-    if (currentModule === 'general' || currentModule === null) {
+    let activeModule = currentModule || 'general';
+
+    // Auto specialization detection
+    if (activeModule === 'general') {
       const matched = checkForSpecialization(text.toLowerCase());
       if (matched) {
-        switchToSpecialized(matched);
-        return;
+        setCurrentModule(matched);
+        activeModule = matched;
+        
+        const switchMsg = {
+          text: `Your symptoms match the ${matched} module. Switching to specialized support now.`,
+          sender: 'bot',
+        };
+        currentMsgs = [...currentMsgs, switchMsg];
+        
+        setPopupMessage(`Now in ${matched.charAt(0).toUpperCase() + matched.slice(1)} Support`);
+        setShowPopup(true);
+        setTimeout(() => setShowPopup(false), 5000);
       }
     }
 
-    // Normal bot response
-    const botResponse = getBotResponse(text, currentModule);
-    const updated = [...newMessages, botResponse];
-    setMessages(updated);
-    updateChatHistory(updated);
-    speak(botResponse.text);
+    setMessages([...currentMsgs]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const endpoint = activeModule === 'general' ? '/api/chat/general' : '/api/chat/specialized';
+      
+      const payload = {
+        message: text,
+        chatId: currentChatId === 0 ? null : currentChatId,
+        module: activeModule,
+        chatHistory: currentMsgs 
+      };
+
+      const res = await fetch(`${config.API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      
+      const botResponseMsg = { text: data.response, sender: 'bot' };
+      setMessages(prev => [...prev, botResponseMsg]);
+      
+      if (!currentChatId && data.chatId) {
+        setCurrentChatId(data.chatId);
+        fetchChats(); 
+      }
+      
+      speak(data.response);
+    } catch(e) {
+      console.error(e);
+      setMessages(prev => [...prev, { text: "I'm having trouble responding right now. Please try again.", sender: 'bot' }]);
+    }
   };
 
   const checkForSpecialization = (text) => {
@@ -134,63 +194,35 @@ const MainChatbot = () => {
     return null;
   };
 
-  const switchToSpecialized = (moduleName) => {
-    setCurrentModule(moduleName);
-    const messagesWithSwitch = [
-      ...messages,
-      {
-        text: `Your symptoms match the ${moduleName} module. Switching to specialized support now.`,
-        sender: 'bot',
-      },
-    ];
-    setMessages(messagesWithSwitch);
-    updateChatHistory(messagesWithSwitch);
 
-    setPopupMessage(`Now in ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)} Support`);
-    setShowPopup(true);
-    setTimeout(() => setShowPopup(false), 5000);
-  };
 
-  const getBotResponse = (text, module) => {
-    if (module === 'general' || module === null) {
-      return { text: 'I am here to help you. Tell me how you’re feeling.', sender: 'bot' };
-    }
-    // You can expand this later for each module
-    return { text: `In ${module} mode – how can I assist you today?`, sender: 'bot' };
-  };
-
-  const updateChatHistory = (updatedMessages) => {
-    const updatedChats = chats.map((chat, i) =>
-      i === currentChatId ? { ...chat, messages: updatedMessages, module: currentModule } : chat
-    );
-    setChats(updatedChats);
-  };
-
-  const deleteChat = (id) => {
+  const deleteChat = async (id) => {
     if (!window.confirm('Delete this chat permanently?')) return;
 
-    const updatedChats = chats.filter((chat) => chat.id !== id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${config.API_BASE_URL}/api/chats/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      
+      const updatedChats = chats.filter((chat) => chat.id !== id);
+      setChats(updatedChats);
 
-    if (id === currentChatId) {
-      setCurrentChatId(0);
-      setMessages([]);
-      setCurrentModule(null);
+      if (id === currentChatId) {
+        setCurrentChatId(0);
+        setMessages([]);
+        setCurrentModule(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      alert('Failed to delete chat session.');
     }
-
-    const reIndexed = updatedChats.map((chat, index) => ({
-      ...chat,
-      id: index,
-    }));
-
-    setChats(reIndexed);
-
-    if (showHistory) setShowHistory(false);
   };
 
   const startNewChat = () => {
-    const newChat = { id: chats.length, messages: [], module: null };
-    setChats([...chats, newChat]);
-    setCurrentChatId(chats.length);
+    setCurrentChatId(0);
     setMessages([]);
     setCurrentModule(null);
     setShowHistory(false);
@@ -198,13 +230,32 @@ const MainChatbot = () => {
     setShowExercise(false);
   };
 
-  const loadChat = (id) => {
-    setCurrentChatId(id);
-    setMessages(chats[id].messages || []);
-    setCurrentModule(chats[id].module || null);
+  const loadChat = async (id) => {
     setShowHistory(false);
     setShowMoodTracker(false);
     setShowExercise(false);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${config.API_BASE_URL}/api/chats/${id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const data = await res.json();
+      
+      const selectedChat = chats.find(c => c.id === id);
+      setCurrentModule(selectedChat ? selectedChat.module : 'general');
+      setCurrentChatId(id);
+      
+      if (data) {
+        setMessages(data.map(m => ({ text: m.text, sender: m.sender })));
+      } else {
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Failed to load chat messages:', error);
+      setMessages([]);
+    }
   };
 
   const CurrentModuleComponent = modules[currentModule] || GeneralModule; // fallback to GeneralModule
@@ -282,10 +333,10 @@ const MainChatbot = () => {
                         {chat.module ? chat.module.toUpperCase() : 'GENERAL'}
                       </div>
                       <div className="card-content">
-                        <h3>Session #{chat.id + 1}</h3>
-                        {chat.messages.length > 0 && (
-                          <p className="last-msg">"{chat.messages[0].text.substring(0, 50)}..."</p>
-                        )}
+                        <h3>Session #{chat.id}</h3>
+                        <p className="last-msg">
+                          {new Date(chat.created_at).toLocaleString()}
+                        </p>
                       </div>
                       <button
                         className="card-delete-btn"

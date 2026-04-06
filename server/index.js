@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long-!!!'; // Must be 32 chars
 const IV_LENGTH = 16;
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const groqOpenAI = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" });
 
 // Ensure uploads directory exists
 if (!fs.existsSync('uploads')) {
@@ -108,41 +108,86 @@ async function getOrCreateChat(userId, module = 'general', chatId = null) {
 }
 
 app.post('/api/chat/general', authenticateToken, async (req, res) => {
-    const { message, chatId: providedChatId } = req.body;
+    const { message, chatId: providedChatId, chatHistory = [] } = req.body;
     try {
         const chatId = await getOrCreateChat(req.user.id, 'general', providedChatId);
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: message }],
-        });
-        const botResponse = completion.choices[0].message.content;
+
+        const recentHistory = chatHistory.slice(-4);
+        const messagesToGroq = [
+            { role: "system", content: "You are a specialized medical and mental health AI assistant. ONLY answer questions related to physical, mental health, and well-being. If the user asks about anything unrelated (e.g., coding, math, general trivia), politely decline to answer. Keep answers exceptionally concise and to the point to provide immediate support. Do not add disclaimers to every single message. Be empathetic but very direct." },
+            ...recentHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text
+            })),
+            { role: "user", content: message }
+        ];
+
+        const groqKey = process.env.GROQ_API_KEY;
+        const response = await axios.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+                model: "llama3-8b-8192",
+                messages: messagesToGroq,
+                max_tokens: 300
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const botResponse = response.data.choices[0].message.content;
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(message)]);
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botResponse)]);
         res.json({ response: botResponse, chatId });
     } catch (error) {
-        console.error(error);
+        console.error('AI Error:', error.response?.data || error.message);
         res.status(500).json({ error: 'AI Error' });
     }
 });
 
 app.post('/api/chat/specialized', authenticateToken, async (req, res) => {
-    const { message, module, chatId: providedChatId } = req.body;
+    const { message, module, chatId: providedChatId, chatHistory = [] } = req.body;
     try {
         const chatId = await getOrCreateChat(req.user.id, module, providedChatId);
-        const hfToken = process.env.HF_API_KEY;
-        const model = "HuggingFaceH4/zephyr-7b-beta"; 
+
+        const recentHistory = chatHistory.slice(-4);
+        const systemPrompt = `You are a professional mental health assistant strictly specializing in ${module}. ONLY answer questions related to mental health and the ${module} context. Decline unrelated questions gracefully. Keep answers extremely concise and helpful.`;
+
+        const messagesToGroq = [
+            { role: "system", content: systemPrompt },
+            ...recentHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text
+            })),
+            { role: "user", content: message }
+        ];
+
+        const groqKey = process.env.GROQ_API_KEY;
+
         const response = await axios.post(
-            `https://api-inference.huggingface.co/models/${model}`,
-            { inputs: `<|system|>\nYou are a professional mental health assistant specializing in ${module}. Provide empathetic support.\n<|user|>\n${message}\n<|assistant|>` },
-            { headers: { Authorization: `Bearer ${hfToken}` } }
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+                model: "llama3-8b-8192",
+                messages: messagesToGroq,
+                max_tokens: 300
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${groqKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
         );
-        let botResponse = response.data[0]?.generated_text || "I'm here to listen.";
-        if (botResponse.includes('<|assistant|>')) botResponse = botResponse.split('<|assistant|>').pop().trim();
+
+        const botResponse = response.data.choices[0].message.content;
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(message)]);
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botResponse)]);
         res.json({ response: botResponse, chatId });
     } catch (error) {
-        console.error('HF Error:', error.response?.data || error.message);
+        console.error('AI Error:', error.response?.data || error.message);
         res.status(500).json({ error: 'HF API Error' });
     }
 });
@@ -166,29 +211,48 @@ app.get('/api/chats/:id/messages', authenticateToken, async (req, res) => {
     }
 });
 
+app.delete('/api/chats/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.execute('DELETE FROM chats WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const upload = multer({ dest: 'uploads/' });
 app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No audio provided' });
     const audioPath = req.file.path;
     try {
-        const transcription = await openai.audio.transcriptions.create({ file: fs.createReadStream(audioPath), model: "whisper-1" });
+        const transcription = await groqOpenAI.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-large-v3-turbo"
+        });
         const userText = transcription.text;
-        const completion = await openai.chat.completions.create({ model: "gpt-4", messages: [{ role: "user", content: userText }] });
+
+        const completion = await groqOpenAI.chat.completions.create({
+            model: "llama3-8b-8192",
+            messages: [
+                { role: "system", content: "You are a specialized medical and mental health AI assistant. ONLY answer questions related to physical, mental health, and well-being. Keep answers exceptionally concise and to the point." },
+                { role: "user", content: userText }
+            ],
+            max_tokens: 300
+        });
         const botText = completion.choices[0].message.content;
-        const mp3 = await openai.audio.speech.create({ model: "tts-1", voice: "alloy", input: botText });
-        const buffer = Buffer.from(await mp3.arrayBuffer());
-        const speechFileName = `speech_${Date.now()}.mp3`;
-        const speechFilePath = path.join('uploads', speechFileName);
-        fs.writeFileSync(speechFilePath, buffer);
+
+        // Remove TTS (Text-To-Speech) generation because Groq does not support the /audio/speech endpoint.
+        // The frontend React UI already uses window.speechSynthesis for native text-to-speech fallback playback.
+
         fs.unlinkSync(audioPath);
-        const chatId = await getOrCreateChat(req.user.id, 'general', 0); 
+        const chatId = await getOrCreateChat(req.user.id, 'general', 0);
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(userText)]);
         await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botText)]);
-        res.json({ userText, botText, audioUrl: `http://localhost:${PORT}/uploads/${speechFileName}`, chatId });
+        res.json({ userText, botText, audioUrl: null, chatId });
     } catch (error) {
         console.error(error);
         if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-        res.status(500).json({ error: 'Voice processing failed' });
+        res.status(500).json({ error: 'Voice processing failed with Groq' });
     }
 });
 
@@ -249,7 +313,7 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.id]);
         const user = rows[0];
-        
+
         if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
             return res.status(401).json({ error: 'Incorrect current password' });
         }
@@ -269,7 +333,7 @@ app.post('/api/forgot-password', async (req, res) => {
     try {
         const [rows] = await pool.execute('SELECT id, name FROM users WHERE email = ?', [email]);
         const user = rows[0];
-        
+
         if (!user) {
             // Success even if not found (security)
             return res.json({ message: 'If an account exists, a reset link will be sent.' });

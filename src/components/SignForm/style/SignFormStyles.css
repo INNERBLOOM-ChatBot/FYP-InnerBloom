@@ -61,14 +61,18 @@
   font-size: 0.98rem;
 }
 
-.form-group {
+.auth-wrapper .form-group,
+.auth-wrappersignin .form-group {
   position: relative;
   margin-bottom: 1.2rem;        
 }
 
-.form-group input,
-.form-group select {
-  width: 90%;
+.auth-wrapper .form-group input,
+.auth-wrapper .form-group select,
+.auth-wrappersignin .form-group input,
+.auth-wrappersignin .form-group select {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.8rem 0.9rem;   
   border: 2px solid #e2e8f0;
   border-radius: 0.85rem;
@@ -77,14 +81,17 @@
   transition: all 0.25s ease;
 }
 
-.form-group input:focus,
-.form-group select:focus {
+.auth-wrapper .form-group input:focus,
+.auth-wrapper .form-group select:focus,
+.auth-wrappersignin .form-group input:focus,
+.auth-wrappersignin .form-group select:focus {
   border-color: #14b8a6;
   box-shadow: 0 0 0 3px rgba(20,184,166,0.12);
   background: white;
 }
 
-.form-group label {
+.auth-wrapper .form-group label,
+.auth-wrappersignin .form-group label {
   position: absolute;
   left: 1rem;
   top: 0.85rem;
@@ -94,10 +101,14 @@
   
 }
 
-.form-group input:focus + label,
-.form-group input:not(:placeholder-shown) + label,
-.form-group select:focus + label,
-.form-group select:not(:placeholder-shown) + label {
+.auth-wrapper .form-group input:focus + label,
+.auth-wrapper .form-group input:not(:placeholder-shown) + label,
+.auth-wrapper .form-group select:focus + label,
+.auth-wrapper .form-group select:not(:placeholder-shown) + label,
+.auth-wrappersignin .form-group input:focus + label,
+.auth-wrappersignin .form-group input:not(:placeholder-shown) + label,
+.auth-wrappersignin .form-group select:focus + label,
+.auth-wrappersignin .form-group select:not(:placeholder-shown) + label {
   top: -0.55rem;
   left: 0.9rem;
   font-size: 0.78rem;
