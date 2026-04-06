@@ -2,6 +2,8 @@
 server/.env
 
 # Logs
+.env
+server/.env
 logs
 *.log
 npm-debug.log*
