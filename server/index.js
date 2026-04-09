@@ -71,22 +71,46 @@ app.get('/health', (req, res) => res.json({ status: 'OK' }));
 
 app.post('/api/register', async (req, res) => {
     const { name, email, password, gender, age } = req.body;
+    const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction();
         const hashedPassword = await bcrypt.hash(password, 10);
-        const [result] = await pool.execute(
-            'INSERT INTO users (name, email, password, gender, age) VALUES (?, ?, ?, ?, ?)',
-            [name, email, hashedPassword, gender, age]
+        
+        // Insert into authentication
+        const [authResult] = await connection.execute(
+            'INSERT INTO authentication (email, password, role) VALUES (?, ?, ?)',
+            [email, hashedPassword, 'patient']
         );
-        res.status(201).json({ message: 'User registered successfully', userId: result.insertId });
+        const authId = authResult.insertId;
+
+        // Insert into patients
+        await connection.execute(
+            'INSERT INTO patients (patient_id, fullname, age, gender, email, password) VALUES (?, ?, ?, ?, ?, ?)',
+            [authId, name, age, gender, email, hashedPassword]
+        );
+
+        await connection.commit();
+        res.status(201).json({ message: 'User registered successfully', userId: authId });
     } catch (error) {
+        await connection.rollback();
         res.status(500).json({ error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+        const [rows] = await pool.execute(`
+            SELECT a.auth_id as id, a.email, a.password, a.role, 
+                   COALESCE(p.fullname, adm.name) as name
+            FROM authentication a
+            LEFT JOIN patients p ON a.auth_id = p.patient_id
+            LEFT JOIN admin adm ON a.auth_id = adm.admin_id
+            WHERE a.email = ?
+        `, [email]);
+        
         const user = rows[0];
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -99,12 +123,59 @@ app.post('/api/login', async (req, res) => {
 });
 
 async function getOrCreateChat(userId, module = 'general', chatId = null) {
-    if (chatId) {
+    if (chatId && chatId !== 0) {
         const [rows] = await pool.execute('SELECT id FROM chats WHERE id = ? AND user_id = ?', [chatId, userId]);
         if (rows.length > 0) return chatId;
     }
-    const [result] = await pool.execute('INSERT INTO chats (user_id, module) VALUES (?, ?)', [userId, module]);
-    return result.insertId;
+    
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        // 1. Insert into base chats table
+        const [chatResult] = await connection.execute(
+            'INSERT INTO chats (user_id, module) VALUES (?, ?)',
+            [userId, module]
+        );
+        const newChatId = chatResult.insertId;
+
+        // 2. Insert into specific module table
+        if (module === 'general') {
+            await connection.execute(
+                'INSERT INTO general_module (g_module_id, patient_id) VALUES (?, ?)',
+                [newChatId, userId]
+            );
+        } else {
+            // Specialized module
+            await connection.execute(
+                'INSERT INTO specialized_module (s_module_id, patient_id) VALUES (?, ?)',
+                [newChatId, userId]
+            );
+            
+            // Subtype tables
+            const subtypes = ['anxiety', 'depression', 'ocd', 'bipolar', 'phobias'];
+            if (subtypes.includes(module)) {
+                await connection.execute(
+                    `INSERT INTO ${module} (${module}_id, patient_id, s_module_id) VALUES (?, ?, ?)`,
+                    [newChatId, userId, newChatId] 
+                );
+                // Note: using newChatId as subtype ID for simplicity and alignment with existing logic if possible, 
+                // but the ERD shows they have their own *_id. Auto-increment will handle it if I don't specify it, 
+                // but here I specify it to keep IDs consistent across tables if possible.
+                // Looking at my migration, I didn't enforce CONSISTENT IDs for subtypes, only for modules.
+                // Let's just let auto-increment handle subtype IDs but link via s_module_id.
+            }
+        }
+
+        await connection.commit();
+        return newChatId;
+    } catch (error) {
+        await connection.rollback();
+        console.error('getOrCreateChat Error:', error);
+        throw error;
+    } finally {
+        connection.release();
+    }
 }
 
 app.post('/api/chat/general', authenticateToken, async (req, res) => {
@@ -139,8 +210,17 @@ app.post('/api/chat/general', authenticateToken, async (req, res) => {
         );
 
         const botResponse = response.data.choices[0].message.content;
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(message)]);
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botResponse)]);
+        const encryptedUserMsg = encrypt(message);
+        const encryptedBotMsg = encrypt(botResponse);
+
+        await pool.execute(
+            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
+            [chatId, 'user', encryptedUserMsg, chatId]
+        );
+        await pool.execute(
+            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
+            [chatId, 'bot', encryptedBotMsg, chatId]
+        );
         res.json({ response: botResponse, chatId });
     } catch (error) {
         console.error('AI Error:', error.response?.data || error.message);
@@ -183,8 +263,22 @@ app.post('/api/chat/specialized', authenticateToken, async (req, res) => {
         );
 
         const botResponse = response.data.choices[0].message.content;
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(message)]);
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botResponse)]);
+        const encryptedUserMsg = encrypt(message);
+        const encryptedBotMsg = encrypt(botResponse);
+
+        const subtypes = ['anxiety', 'depression', 'ocd', 'bipolar', 'phobias'];
+        const subtypeCol = subtypes.includes(module) ? `${module}_id` : null;
+
+        let query = 'INSERT INTO messages (chat_id, sender, text, s_module_id' + (subtypeCol ? `, ${subtypeCol}` : '') + ') VALUES (?, ?, ?, ?' + (subtypeCol ? ', ?' : '') + ')';
+        let paramsUser = [chatId, 'user', encryptedUserMsg, chatId];
+        if (subtypeCol) paramsUser.push(chatId);
+
+        let paramsBot = [chatId, 'bot', encryptedBotMsg, chatId];
+        if (subtypeCol) paramsBot.push(chatId);
+
+        await pool.execute(query, paramsUser);
+        await pool.execute(query, paramsBot);
+
         res.json({ response: botResponse, chatId });
     } catch (error) {
         console.error('AI Error:', error.response?.data || error.message);
@@ -246,8 +340,18 @@ app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (re
 
         fs.unlinkSync(audioPath);
         const chatId = await getOrCreateChat(req.user.id, 'general', 0);
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'user', encrypt(userText)]);
-        await pool.execute('INSERT INTO messages (chat_id, sender, text) VALUES (?, ?, ?)', [chatId, 'bot', encrypt(botText)]);
+        
+        const encryptedUserMsg = encrypt(userText);
+        const encryptedBotMsg = encrypt(botText);
+
+        await pool.execute(
+            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
+            [chatId, 'user', encryptedUserMsg, chatId]
+        );
+        await pool.execute(
+            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
+            [chatId, 'bot', encryptedBotMsg, chatId]
+        );
         res.json({ userText, botText, audioUrl: null, chatId });
     } catch (error) {
         console.error(error);
@@ -259,7 +363,7 @@ app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (re
 app.post('/api/mood/log', authenticateToken, async (req, res) => {
     const { mood_type, method, result_data } = req.body;
     try {
-        await pool.execute('INSERT INTO mood_logs (user_id, mood_type, method, result_data) VALUES (?, ?, ?, ?)', [req.user.id, mood_type, method, JSON.stringify(result_data)]);
+        await pool.execute('INSERT INTO mood_detection (patient_id, mood_type, method, result_data) VALUES (?, ?, ?, ?)', [req.user.id, mood_type, method, JSON.stringify(result_data)]);
         res.status(201).json({ message: 'Mood logged' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -268,7 +372,7 @@ app.post('/api/mood/log', authenticateToken, async (req, res) => {
 
 app.get('/api/mood/history', authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.execute('SELECT * FROM mood_logs WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
+        const [rows] = await pool.execute('SELECT * FROM mood_detection WHERE patient_id = ? ORDER BY created_at DESC', [req.user.id]);
         res.json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -277,7 +381,12 @@ app.get('/api/mood/history', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.execute('SELECT id, name, email, role, created_at FROM users');
+        const [rows] = await pool.execute(`
+            SELECT a.auth_id as id, p.fullname as name, a.email, a.role, a.created_at 
+            FROM authentication a
+            LEFT JOIN patients p ON a.auth_id = p.patient_id
+            LEFT JOIN admin adm ON a.auth_id = adm.admin_id
+        `);
         res.json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -286,7 +395,12 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/moods', authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`SELECT ml.*, u.name as user_name FROM mood_logs ml JOIN users u ON ml.user_id = u.id ORDER BY ml.created_at DESC`);
+        const [rows] = await pool.execute(`
+            SELECT md.*, p.fullname as user_name 
+            FROM mood_detection md 
+            JOIN patients p ON md.patient_id = p.patient_id 
+            ORDER BY md.created_at DESC
+        `);
         res.json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -297,21 +411,34 @@ app.get('/api/admin/moods', authenticateToken, async (req, res) => {
 
 app.put('/api/user/profile', authenticateToken, async (req, res) => {
     const { name, email, age, gender } = req.body;
+    const connection = await pool.getConnection();
     try {
-        await pool.execute(
-            'UPDATE users SET name = ?, email = ?, age = ?, gender = ? WHERE id = ?',
+        await connection.beginTransaction();
+        
+        await connection.execute(
+            'UPDATE authentication SET email = ? WHERE auth_id = ?',
+            [email, req.user.id]
+        );
+        
+        await connection.execute(
+            'UPDATE patients SET fullname = ?, email = ?, age = ?, gender = ? WHERE patient_id = ?',
             [name, email, age, gender, req.user.id]
         );
+        
+        await connection.commit();
         res.json({ message: 'Profile updated successfully' });
     } catch (error) {
+        await connection.rollback();
         res.status(500).json({ error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
 app.put('/api/user/password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.id]);
+        const [rows] = await pool.execute('SELECT password FROM authentication WHERE auth_id = ?', [req.user.id]);
         const user = rows[0];
 
         if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
@@ -319,7 +446,10 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await pool.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+        await pool.execute('UPDATE authentication SET password = ? WHERE auth_id = ?', [hashedPassword, req.user.id]);
+        // Also update in patients if we store it there (redundant but the ERD shows it)
+        await pool.execute('UPDATE patients SET password = ? WHERE patient_id = ?', [hashedPassword, req.user.id]);
+        
         res.json({ message: 'Password updated successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -331,7 +461,7 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
 app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT id, name FROM users WHERE email = ?', [email]);
+        const [rows] = await pool.execute('SELECT auth_id as id FROM authentication WHERE email = ?', [email]);
         const user = rows[0];
 
         if (!user) {
@@ -343,7 +473,7 @@ app.post('/api/forgot-password', async (req, res) => {
         const expiry = new Date(Date.now() + 3600000); // 1 hour
 
         await pool.execute(
-            'UPDATE users SET reset_token = ?, reset_expiry = ? WHERE id = ?',
+            'UPDATE authentication SET reset_token = ?, reset_expiry = ? WHERE auth_id = ?',
             [token, expiry, user.id]
         );
 
@@ -361,7 +491,7 @@ app.post('/api/reset-password', async (req, res) => {
     const { token, newPassword } = req.body;
     try {
         const [rows] = await pool.execute(
-            'SELECT id FROM users WHERE reset_token = ? AND reset_expiry > NOW()',
+            'SELECT auth_id as id FROM authentication WHERE reset_token = ? AND reset_expiry > NOW()',
             [token]
         );
         const user = rows[0];
@@ -372,9 +502,10 @@ app.post('/api/reset-password', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await pool.execute(
-            'UPDATE users SET password = ?, reset_token = NULL, reset_expiry = NULL WHERE id = ?',
+            'UPDATE authentication SET password = ?, reset_token = NULL, reset_expiry = NULL WHERE auth_id = ?',
             [hashedPassword, user.id]
         );
+        await pool.execute('UPDATE patients SET password = ? WHERE patient_id = ?', [hashedPassword, user.id]);
 
         res.json({ message: 'Password reset successful. You can now login.' });
     } catch (error) {
