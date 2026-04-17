@@ -13,7 +13,8 @@ import {
   faHistory
 
 } from '@fortawesome/free-solid-svg-icons';
-import './MoodtrackerStyle.css'
+import './MoodtrackerStyle.css';
+import config from '../../../config.js';
 
 const possibleMoods = [
   { type: 'Happy',   icon: 'face-smile', color: '#22c55e' },
@@ -23,6 +24,16 @@ const possibleMoods = [
   { type: 'Excited', icon: 'face-grin-stars', color: '#eab308' },
   { type: 'Anxious', icon:'face-anxious-sweat', color: '#f59e0b' },
 ];
+const emotionToMoodMap = {
+  happy: { type: 'Happy', emoji: '😊', color: '#22c55e' },
+  sad: { type: 'Sad', emoji: '😢', color: '#3b82f6' },
+  angry: { type: 'Angry', emoji: '😠', color: '#ef4444' },
+  neutral: { type: 'Neutral', emoji: '😐', color: '#6b7280' },
+  surprised: { type: 'Surprised', emoji: '😲', color: '#8b5cf6' },
+  disgusted: { type: 'Disgusted', emoji: '🤢', color: '#10b981' },
+  fearful: { type: 'Fearful', emoji: '😨', color: '#f59e0b' },
+};
+
 const MoodTracker = () => {
   const [history, setHistory] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -265,7 +276,7 @@ const stopCamera = () => {
     }
     if (videoRef.current) videoRef.current.srcObject = null;
   };
-  const saveToHistory = () => {
+  const saveToHistory = async () => {
     if (!currentMood) return;
 
     const newEntry = {
@@ -277,11 +288,28 @@ const stopCamera = () => {
       method: inputMethod,
     };
 
+    try {
+        const token = localStorage.getItem('token');
+        await fetch(`${config.API_BASE_URL}/api/mood/log`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                mood_type: currentMood.type,
+                method: inputMethod,
+                result_data: { score: currentMood.score }
+            })
+        });
+    } catch (error) {
+        console.error("Failed to save mood strictly to DB", error);
+    }
+
     setHistory(prev => [newEntry, ...prev]);
     setShowResultModal(false);
     setCapturedImage(null);
 
-    // Clean up audio if exists
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);

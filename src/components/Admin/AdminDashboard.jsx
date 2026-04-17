@@ -12,7 +12,13 @@ const AdminDashboard = () => {
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
-        if (user) setCurrentUser(user);
+        if (user) {
+            setCurrentUser(user);
+            if (user.role !== 'admin') {
+                navigate('/chat');
+                return;
+            }
+        }
         
         const fetchData = async () => {
             const token = localStorage.getItem('token');

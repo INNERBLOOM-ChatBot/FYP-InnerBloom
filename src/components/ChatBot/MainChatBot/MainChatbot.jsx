@@ -215,21 +215,21 @@ const MainChatbot = () => {
     const lowerText = text.toLowerCase();
 
     const anxietyKw = [
-      'anxious', 'worry', 'worried', 'nervous', 'panic', 'fear', 'restless', 'keyed up', 'on edge',
+      'anxiety', 'anxious', 'worry', 'worried', 'nervous', 'panic', 'fear', 'restless', 'keyed up', 'on edge',
       'fatigued', 'tired easily', 'concentration', 'mind blank', 'irritable', 'muscle tension',
       'sleep disturbance', 'heart racing', 'sweating', 'trembling', 'hyperventilation'
     ];
     if (anxietyKw.some(kw => lowerText.includes(kw))) return 'anxiety';
 
     const depressionKw = [
-      'sad', 'depressed', 'hopeless', 'empty', 'tearful', 'no interest', 'anhedonia', 'pleasure',
+      'depression', 'sad', 'depressed', 'hopeless', 'empty', 'tearful', 'no interest', 'anhedonia', 'pleasure',
       'tired', 'fatigue', 'energy low', 'worthless', 'guilt', 'concentration', 'appetite change',
       'weight change', 'insomnia', 'hypersomnia', 'psychomotor', 'suicidal', 'death thoughts'
     ];
     if (depressionKw.some(kw => lowerText.includes(kw))) return 'depression';
 
     const bipolarKw = [
-      'manic', 'hypomanic', 'elevated mood', 'expansive', 'irritable extreme', 'grandiosity',
+      'bipolar', 'manic', 'hypomanic', 'elevated mood', 'expansive', 'irritable extreme', 'grandiosity',
       'inflated self', 'decreased sleep', 'need less sleep', 'talkative', 'pressure talk',
       'racing thoughts', 'flight ideas', 'distractible', 'goal directed', 'psychomotor agitation',
       'risky behavior', 'spending spree', 'sexual indiscretion'
@@ -237,7 +237,7 @@ const MainChatbot = () => {
     if (bipolarKw.some(kw => lowerText.includes(kw))) return 'bipolar';
 
     const ocdKw = [
-      'obsession', 'intrusive thought', 'unwanted thought', 'urge', 'compulsion', 'ritual',
+      'ocd', 'obsession', 'intrusive thought', 'unwanted thought', 'urge', 'compulsion', 'ritual',
       'checking', 'cleaning', 'washing', 'hand wash', 'ordering', 'arranging', 'counting',
       'repeating', 'contamination', 'fear germ', 'doubt', 'symmetry', 'perfect'
     ];
