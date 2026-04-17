@@ -23,6 +23,7 @@ import BipolarModule from "./components/ChatBot/modules/SpecializedModule/Bipola
 import PhobiasModule from "./components/ChatBot/modules/SpecializedModule/PhobiasModule";
 import GeneralModule from "./components/ChatBot/modules/GeneralModule";
 import Profile from "./components/Profile/Profile.jsx";
+import FeedbackForm from "./components/Feedback/FeedbackForm.jsx";
 
 // Layout & Guards
 import Layout from "./components/Layout/Layout";
@@ -59,6 +60,7 @@ function App() {
             <Route path="ocd" element={<OCDModule />} />
             <Route path="bipolar" element={<BipolarModule />} />
             <Route path="phobias" element={<PhobiasModule />} />
+            <Route path="feedback" element={<FeedbackForm />} />
           </Route>
         </Route>
       </Routes>

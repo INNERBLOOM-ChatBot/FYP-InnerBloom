@@ -49,8 +49,7 @@ const GeneralModule =
       onTouchStart={startRecording}
       onTouchEnd={stopRecording}
    className={`voice-btn ${isRecording ? 'recording' : ''}`}
-  title={isRecording ? 'Release to send' : 'Hold to speak'}
-  disabled={isRecording && !mediaRecorder}>
+  title={isRecording ? 'Release to send' : 'Hold to speak'}>
   {isRecording ? (
   <i className="fa-solid fa-square" style={{ color: '#ff4444' }}></i>
   ) : (
