@@ -43,6 +43,65 @@ const MainChatbot = () => {
     setIsListening((prev) => !prev);
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        
+        try {
+          const token = localStorage.getItem('token');
+          const res = await fetch(`${config.API_BASE_URL}/api/chat/voice`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData
+          });
+
+          if (!res.ok) throw new Error('Voice API Error');
+          const data = await res.json();
+          setMessages(prev => [
+            ...prev,
+            { text: data.userText, sender: 'user' },
+            { text: data.botText, sender: 'bot' }
+          ]);
+          
+          if (!currentChatId && data.chatId) {
+            setCurrentChatId(data.chatId);
+            fetchChats();
+          }
+          speak(data.botText);
+        } catch(err) {
+          console.error(err);
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      setAudioChunks([]);
+      setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
   // ── MISSING FUNCTION ── Add this (was causing "handleBack is not defined")
   const handleBack = () => {
     setShowExercise(false);
@@ -156,21 +215,21 @@ const MainChatbot = () => {
     const lowerText = text.toLowerCase();
 
     const anxietyKw = [
-      'anxious', 'worry', 'worried', 'nervous', 'panic', 'fear', 'restless', 'keyed up', 'on edge',
+      'anxiety', 'anxious', 'worry', 'worried', 'nervous', 'panic', 'fear', 'restless', 'keyed up', 'on edge',
       'fatigued', 'tired easily', 'concentration', 'mind blank', 'irritable', 'muscle tension',
       'sleep disturbance', 'heart racing', 'sweating', 'trembling', 'hyperventilation'
     ];
     if (anxietyKw.some(kw => lowerText.includes(kw))) return 'anxiety';
 
     const depressionKw = [
-      'sad', 'depressed', 'hopeless', 'empty', 'tearful', 'no interest', 'anhedonia', 'pleasure',
+      'depression', 'sad', 'depressed', 'hopeless', 'empty', 'tearful', 'no interest', 'anhedonia', 'pleasure',
       'tired', 'fatigue', 'energy low', 'worthless', 'guilt', 'concentration', 'appetite change',
       'weight change', 'insomnia', 'hypersomnia', 'psychomotor', 'suicidal', 'death thoughts'
     ];
     if (depressionKw.some(kw => lowerText.includes(kw))) return 'depression';
 
     const bipolarKw = [
-      'manic', 'hypomanic', 'elevated mood', 'expansive', 'irritable extreme', 'grandiosity',
+      'bipolar', 'manic', 'hypomanic', 'elevated mood', 'expansive', 'irritable extreme', 'grandiosity',
       'inflated self', 'decreased sleep', 'need less sleep', 'talkative', 'pressure talk',
       'racing thoughts', 'flight ideas', 'distractible', 'goal directed', 'psychomotor agitation',
       'risky behavior', 'spending spree', 'sexual indiscretion'
@@ -178,7 +237,7 @@ const MainChatbot = () => {
     if (bipolarKw.some(kw => lowerText.includes(kw))) return 'bipolar';
 
     const ocdKw = [
-      'obsession', 'intrusive thought', 'unwanted thought', 'urge', 'compulsion', 'ritual',
+      'ocd', 'obsession', 'intrusive thought', 'unwanted thought', 'urge', 'compulsion', 'ritual',
       'checking', 'cleaning', 'washing', 'hand wash', 'ordering', 'arranging', 'counting',
       'repeating', 'contamination', 'fear germ', 'doubt', 'symmetry', 'perfect'
     ];
@@ -374,6 +433,9 @@ const MainChatbot = () => {
                   currentModule={currentModule}
                   isListening={isListening}
                   toggleListening={toggleListening}
+                  startRecording={startRecording}
+                  stopRecording={stopRecording}
+                  isRecording={isRecording}
                 />
               )}
               <div ref={messagesEndRef} />

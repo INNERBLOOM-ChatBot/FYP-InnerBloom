@@ -20,7 +20,7 @@ app.use('/uploads', express.static('uploads'));
 
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long-!!!'; // Must be 32 chars
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-secret-key-32-chars-long-!!'; // Must be 32 chars
 const IV_LENGTH = 16;
 const groqOpenAI = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" });
 
@@ -75,7 +75,7 @@ app.post('/api/register', async (req, res) => {
     try {
         await connection.beginTransaction();
         const hashedPassword = await bcrypt.hash(password, 10);
-        
+
         // Insert into authentication
         const [authResult] = await connection.execute(
             'INSERT INTO authentication (email, password, role) VALUES (?, ?, ?)',
@@ -110,7 +110,7 @@ app.post('/api/login', async (req, res) => {
             LEFT JOIN admin adm ON a.auth_id = adm.admin_id
             WHERE a.email = ?
         `, [email]);
-        
+
         const user = rows[0];
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -127,11 +127,11 @@ async function getOrCreateChat(userId, module = 'general', chatId = null) {
         const [rows] = await pool.execute('SELECT id FROM chats WHERE id = ? AND user_id = ?', [chatId, userId]);
         if (rows.length > 0) return chatId;
     }
-    
+
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-        
+
         // 1. Insert into base chats table
         const [chatResult] = await connection.execute(
             'INSERT INTO chats (user_id, module) VALUES (?, ?)',
@@ -151,13 +151,13 @@ async function getOrCreateChat(userId, module = 'general', chatId = null) {
                 'INSERT INTO specialized_module (s_module_id, patient_id) VALUES (?, ?)',
                 [newChatId, userId]
             );
-            
+
             // Subtype tables
             const subtypes = ['anxiety', 'depression', 'ocd', 'bipolar', 'phobias'];
             if (subtypes.includes(module)) {
                 await connection.execute(
                     `INSERT INTO ${module} (${module}_id, patient_id, s_module_id) VALUES (?, ?, ?)`,
-                    [newChatId, userId, newChatId] 
+                    [newChatId, userId, newChatId]
                 );
                 // Note: using newChatId as subtype ID for simplicity and alignment with existing logic if possible, 
                 // but the ERD shows they have their own *_id. Auto-increment will handle it if I don't specify it, 
@@ -197,7 +197,7 @@ app.post('/api/chat/general', authenticateToken, async (req, res) => {
         const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
-                model: "llama3-8b-8192",
+                model: "llama-3.3-70b-versatile",
                 messages: messagesToGroq,
                 max_tokens: 300
             },
@@ -250,7 +250,7 @@ app.post('/api/chat/specialized', authenticateToken, async (req, res) => {
         const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
-                model: "llama3-8b-8192",
+                model: "llama-3.3-70b-versatile",
                 messages: messagesToGroq,
                 max_tokens: 300
             },
@@ -317,8 +317,12 @@ app.delete('/api/chats/:id', authenticateToken, async (req, res) => {
 const upload = multer({ dest: 'uploads/' });
 app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No audio provided' });
-    const audioPath = req.file.path;
+    let audioPath = req.file.path;
+    const audioPathWithExt = audioPath + '.webm';
     try {
+        fs.renameSync(audioPath, audioPathWithExt);
+        audioPath = audioPathWithExt;
+
         const transcription = await groqOpenAI.audio.transcriptions.create({
             file: fs.createReadStream(audioPath),
             model: "whisper-large-v3-turbo"
@@ -326,7 +330,7 @@ app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (re
         const userText = transcription.text;
 
         const completion = await groqOpenAI.chat.completions.create({
-            model: "llama3-8b-8192",
+            model: "llama-3.3-70b-versatile",
             messages: [
                 { role: "system", content: "You are a specialized medical and mental health AI assistant. ONLY answer questions related to physical, mental health, and well-being. Keep answers exceptionally concise and to the point." },
                 { role: "user", content: userText }
@@ -340,7 +344,7 @@ app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (re
 
         fs.unlinkSync(audioPath);
         const chatId = await getOrCreateChat(req.user.id, 'general', 0);
-        
+
         const encryptedUserMsg = encrypt(userText);
         const encryptedBotMsg = encrypt(botText);
 
@@ -370,6 +374,16 @@ app.post('/api/mood/log', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/feedback', authenticateToken, async (req, res) => {
+    const { feedback } = req.body;
+    try {
+        await pool.execute('INSERT INTO feedbacks (patient_id, feedbacks) VALUES (?, ?)', [req.user.id, feedback]);
+        res.status(201).json({ message: 'Feedback submitted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/mood/history', authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.execute('SELECT * FROM mood_detection WHERE patient_id = ? ORDER BY created_at DESC', [req.user.id]);
@@ -382,7 +396,7 @@ app.get('/api/mood/history', authenticateToken, async (req, res) => {
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.execute(`
-            SELECT a.auth_id as id, p.fullname as name, a.email, a.role, a.created_at 
+            SELECT a.auth_id as id, COALESCE(p.fullname, adm.name, 'Admin') as name, a.email, a.role, a.created_at 
             FROM authentication a
             LEFT JOIN patients p ON a.auth_id = p.patient_id
             LEFT JOIN admin adm ON a.auth_id = adm.admin_id
@@ -414,17 +428,17 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-        
+
         await connection.execute(
             'UPDATE authentication SET email = ? WHERE auth_id = ?',
             [email, req.user.id]
         );
-        
+
         await connection.execute(
             'UPDATE patients SET fullname = ?, email = ?, age = ?, gender = ? WHERE patient_id = ?',
             [name, email, age, gender, req.user.id]
         );
-        
+
         await connection.commit();
         res.json({ message: 'Profile updated successfully' });
     } catch (error) {
@@ -449,7 +463,7 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
         await pool.execute('UPDATE authentication SET password = ? WHERE auth_id = ?', [hashedPassword, req.user.id]);
         // Also update in patients if we store it there (redundant but the ERD shows it)
         await pool.execute('UPDATE patients SET password = ? WHERE patient_id = ?', [hashedPassword, req.user.id]);
-        
+
         res.json({ message: 'Password updated successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });

@@ -1,80 +1,95 @@
 # InnerBloom - Mental Health Support System
 
-InnerBloom is a professional mental health chat application and admin management system built with React, Node.js, and MySQL. It features specialized chat modules, an advanced admin dashboard, and secure user authentication.
+InnerBloom is a professional mental health chat application and admin management system built with React, Node.js, and MySQL. It features specialized chat modules, an advanced AI mood-tracking dashboard, and secure user authentication.
 
 ## ✨ Key Features
 
 - **Professional UI/UX**: Modern symmetric design with glassmorphism aesthetic and a premium dark-themed sidebar.
-- **Smart Master Layout**: Persistent Sidebar and Header across all authenticated pages.
-- **Mental Health Chat**: Specialized modules for Anxiety, Depression, and General support with a clean, toolbar-based navigation.
+- **Mental Health Chat & Voice**: Specialized modules for Anxiety, Depression, and General support with integrated microphone voice tracking.
+- **AI Face & Mood Tracker**: Live TensorFlow.js mood scanning and sentiment analysis.
 - **Admin Control Center**: Comprehensive dashboard for monitoring user activity, mood logs, and managing registrations.
-- **Secure Authentication**: ROLE-based access control (Admin/User), JWT session management, and protected routes.
-- **Profile Management**: Integrated user profile settings for updating information and changing passwords.
-- **Advanced Recovery**: Full "Forgot Password" flow with secure time-limited tokens.
+- **Secure Authentication**: ROLE-based access control (Admin/User) and Route locking. 
 
 ---
 
-## 🚀 Setup & Installation
+## 🚀 Setup & Installation Guide
+
+Here is exactly how to set up the project locally from scratch:
 
 ### 1. Database Setup
-1.  Ensure you have **MySQL** installed and running.
-2.  Import the database schema:
-    ```bash
-    mysql -u your_user -p < server/schema.sql
-    ```
-    *This creates the `innerbloom` database and all required tables.*
+1. Ensure your local **MySQL** server is running.
+2. Because MySQL is often not added to the terminal PATH on Windows, initialize the database by **searching for "MySQL Command Line Client"** in your Windows Start Menu. Open it, enter your password, and run the following commands (replace the path with your actual project directory path using forward slashes):
+   ```sql
+   mysql> CREATE DATABASE innerbloom;
+   mysql> USE innerbloom;
+   mysql> SOURCE C:/path/to/FYP-InnerBloom/server/schema.sql;
+   ```
+   *(This fully creates the `innerbloom` database and all required tables.)*
+
+> **Note**: If you face connection errors like *`Plugin 'mysql_native_password' is not loaded`*, you must ensure your MySQL user uses standard encrypted caching:
+> `ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'your_password';`
+> `FLUSH PRIVILEGES;`
 
 ### 2. Environment Configuration
-Create a `.env` file in the `server/` directory:
+Create a `.env` file directly inside the `server/` directory. Be mindful of the Database Port (if you aren't using the default `3306`), and the Groq Key requirement.
 ```env
 PORT=5001
 DB_HOST=localhost
-DB_USER=your_mysql_user
-DB_PASSWORD=your_mysql_password
+DB_USER=root
+DB_PASSWORD=your_password
 DB_NAME=innerbloom
+DB_PORT=3300 # Only if using a custom MySQL port 
+
 JWT_SECRET=your_super_secret_key
+ENCRYPTION_KEY=your_exactly_32_chars_long_key_here
+
+# Groq is used as the LLM engine instead of standard OpenAI
+GROQ_API_KEY=gsk_your_groq_api_key
 ```
 
-In the root directory, ensure `src/config.js` or `.env` points to the correct backend:
-`VITE_API_BASE_URL=http://localhost:5001`
-
 ### 3. Installation
-Install dependencies for both frontend and backend:
+Install all Node modules for both ends simultaneously:
 ```bash
-# Install root (frontend) dependencies
+# Frontend
 npm install
 
-# Install backend dependencies
+# Backend
 cd server
 npm install
-cd ..
 ```
 
 ### 4. Running the Application
-You will need two terminal windows open:
+You will need two separate terminals efficiently running the application.
 
-**Terminal 1 (Backend):**
+**Terminal 1 (Backend - API Server):**
 ```bash
 cd server
 npm run dev
 ```
+*(Runs on `http://localhost:5001`)*
 
-**Terminal 2 (Frontend):**
+**Terminal 2 (Frontend - React UI):**
 ```bash
 npm run dev
 ```
+*(Runs on `http://localhost:5173`)*
 
 ---
 
-## 🛠️ Technology Stack
-- **Frontend**: React 18, Vite, React Router 6, Vanilla CSS (Premium styling).
-- **Backend**: Node.js, Express, MySQL (mysql2/promise).
-- **Security**: JWT (JSON Web Tokens), Bcrypt.js (Password hashing).
+## 🔐 Accounts for Testing
+When the `schema.sql` database file was imported, it automatically instantiated test accounts for verification use. 
 
-## 📁 Project Structure
-- `/src`: Frontend React application.
-- `/server`: Node.js/Express backend server.
-- `/server/schema.sql`: Database definition and dummy accounts.
+**Admin Management Account:**
+- **Email:** `admin@innerbloom.com`
+- **Password:** `admin123`
+*(Make sure you log out of any patient accounts to access the protected `/admin` route securely)*
+
+---
+
+## 📁 Project Structure Details
+- **`/src`**: Frontend React application (Uses absolute routes mapped in `App.jsx`).
+- **`/server`**: Node.js/Express backend server including Database configurations.
+- **`/public/models`**: Highly important standard folder holding the loaded TensorFlow FaceAPI manifestations securely formatted as `.bin` extensions.
 
 ---
 *Created with ❤️ for Mental Health Support.*

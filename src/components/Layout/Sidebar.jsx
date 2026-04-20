@@ -34,6 +34,11 @@ const Sidebar = () => {
                     <i className="fas fa-cog"></i>
                     <span>Settings</span>
                 </NavLink>
+
+                <NavLink to="/feedback" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+                    <i className="fas fa-comment-dots"></i>
+                    <span>Feedback</span>
+                </NavLink>
             </nav>
 
             <div className="sidebar-footer">
