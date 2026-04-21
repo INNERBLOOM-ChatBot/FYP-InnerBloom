@@ -5,9 +5,9 @@ InnerBloom is a professional mental health chat application and admin management
 ## ✨ Key Features
 
 - **Professional UI/UX**: Modern symmetric design with glassmorphism aesthetic and a premium dark-themed sidebar.
-- **Mental Health Chat & Voice**: Specialized modules for Anxiety, Depression, and General support with integrated microphone voice tracking.
+- **Unified Mental Health Chat & Voice**: Specialized modules for Anxiety, Depression, and General support. The application features seamless Speech-to-Text (STT) parsing using Whisper—treating voice recordings identically to text sequences so that conversation contexts and diagnostic modules remain perfectly intact.
 - **AI Face & Mood Tracker**: Live TensorFlow.js mood scanning and sentiment analysis.
-- **Admin Control Center**: Comprehensive dashboard for monitoring user activity, mood logs, and managing registrations.
+- **Admin Control Center**: Comprehensive dashboard for monitoring user activity, mood logs, and managing registrations. Admins are empowered to test all user chat functionality dynamically without database errors.
 - **Secure Authentication**: ROLE-based access control (Admin/User) and Route locking. 
 
 ---
@@ -17,7 +17,7 @@ InnerBloom is a professional mental health chat application and admin management
 Here is exactly how to set up the project locally from scratch:
 
 ### 1. Database Setup
-1. Ensure your local **MySQL** server is running.
+1. Ensure your local **MySQL/MariaDB** server is running.
 2. Because MySQL is often not added to the terminal PATH on Windows, initialize the database by **searching for "MySQL Command Line Client"** in your Windows Start Menu. Open it, enter your password, and run the following commands (replace the path with your actual project directory path using forward slashes):
    ```sql
    mysql> CREATE DATABASE innerbloom;
@@ -31,6 +31,8 @@ Here is exactly how to set up the project locally from scratch:
 > `FLUSH PRIVILEGES;`
 
 ### 2. Environment Configuration
+
+**1. Backend `.env` (`server/.env`)**
 Create a `.env` file directly inside the `server/` directory. Be mindful of the Database Port (if you aren't using the default `3306`), and the Groq Key requirement.
 ```env
 PORT=5001
@@ -43,8 +45,16 @@ DB_PORT=3300 # Only if using a custom MySQL port
 JWT_SECRET=your_super_secret_key
 ENCRYPTION_KEY=your_exactly_32_chars_long_key_here
 
-# Groq is used as the LLM engine instead of standard OpenAI
-GROQ_API_KEY=gsk_your_groq_api_key
+# Groq is used as the primary LLM engine (Llama-3 & Whisper)
+GROQ_API_KEY=gsk_your_groq_api_key_here
+```
+
+**2. Frontend `.env` (`/.env`)**
+Create a separate `.env` explicitly in the root directory (where package.json lies) specifically for Vite:
+```env
+# Frontend Vite environment variables
+VITE_API_URL=http://localhost:5001
+GROQ_API_KEY=gsk_your_frontend_groq_api_key_here
 ```
 
 ### 3. Installation
@@ -77,18 +87,22 @@ npm run dev
 ---
 
 ## 🔐 Accounts for Testing
-When the `schema.sql` database file was imported, it automatically instantiated test accounts for verification use. 
+When the `schema.sql` database file was imported, it automatically instantiated test accounts for verification use. You can also securely use the signup feature dynamically.
 
 **Admin Management Account:**
 - **Email:** `admin@innerbloom.com`
 - **Password:** `admin123`
-*(Make sure you log out of any patient accounts to access the protected `/admin` route securely)*
+*(Make sure you log out of any patient accounts to access the protected `/admin` route securely. You may test the chat feature as an Admin without crashing the system.)*
+
+**Standard User Account:**
+- **Email:** `user@innerbloom.com`
+- **Password:** `password123` *(Note: Example password, we recommend simply registering a new generic user account for robust testing).*
 
 ---
 
 ## 📁 Project Structure Details
-- **`/src`**: Frontend React application (Uses absolute routes mapped in `App.jsx`).
-- **`/server`**: Node.js/Express backend server including Database configurations.
+- **`/src`**: Frontend React application (Uses absolute routes mapped in `App.jsx`, organized by nested components).
+- **`/server`**: Node.js/Express backend server handling Authentication, Groq API interfaces, and MySQL interactions safely.
 - **`/public/models`**: Highly important standard folder holding the loaded TensorFlow FaceAPI manifestations securely formatted as `.bin` extensions.
 
 ---
