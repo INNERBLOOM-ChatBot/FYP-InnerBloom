@@ -132,6 +132,11 @@ async function getOrCreateChat(userId, module = 'general', chatId = null) {
     try {
         await connection.beginTransaction();
 
+        // Ensure the user exists in patients table so foreign keys don't fail (for Admins testing)
+        try {
+            await connection.execute('INSERT IGNORE INTO patients (patient_id, fullname, email) SELECT auth_id, email, email FROM authentication WHERE auth_id = ?', [userId]);
+        } catch (e) { /* ignore */ }
+
         // 1. Insert into base chats table
         const [chatResult] = await connection.execute(
             'INSERT INTO chats (user_id, module) VALUES (?, ?)',
@@ -329,34 +334,11 @@ app.post('/api/chat/voice', authenticateToken, upload.single('audio'), async (re
         });
         const userText = transcription.text;
 
-        const completion = await groqOpenAI.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-                { role: "system", content: "You are a specialized medical and mental health AI assistant. ONLY answer questions related to physical, mental health, and well-being. Keep answers exceptionally concise and to the point." },
-                { role: "user", content: userText }
-            ],
-            max_tokens: 300
-        });
-        const botText = completion.choices[0].message.content;
-
-        // Remove TTS (Text-To-Speech) generation because Groq does not support the /audio/speech endpoint.
-        // The frontend React UI already uses window.speechSynthesis for native text-to-speech fallback playback.
-
         fs.unlinkSync(audioPath);
-        const chatId = await getOrCreateChat(req.user.id, 'general', 0);
-
-        const encryptedUserMsg = encrypt(userText);
-        const encryptedBotMsg = encrypt(botText);
-
-        await pool.execute(
-            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
-            [chatId, 'user', encryptedUserMsg, chatId]
-        );
-        await pool.execute(
-            'INSERT INTO messages (chat_id, sender, text, g_module_id) VALUES (?, ?, ?, ?)',
-            [chatId, 'bot', encryptedBotMsg, chatId]
-        );
-        res.json({ userText, botText, audioUrl: null, chatId });
+        
+        // Return only the transcribed text to the client
+        // The frontend will now natively insert this text into the chat stream via handleSend
+        res.json({ text: userText });
     } catch (error) {
         console.error(error);
         if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);

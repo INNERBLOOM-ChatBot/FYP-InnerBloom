@@ -57,6 +57,8 @@ const MainChatbot = () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('chatId', currentChatId || 0);
+        formData.append('module', currentModule || 'general');
         
         try {
           const token = localStorage.getItem('token');
@@ -68,17 +70,11 @@ const MainChatbot = () => {
 
           if (!res.ok) throw new Error('Voice API Error');
           const data = await res.json();
-          setMessages(prev => [
-            ...prev,
-            { text: data.userText, sender: 'user' },
-            { text: data.botText, sender: 'bot' }
-          ]);
           
-          if (!currentChatId && data.chatId) {
-            setCurrentChatId(data.chatId);
-            fetchChats();
+          if (data.text) {
+             // Directly send the transcribed text using our robust text chat API
+             handleSend(data.text);
           }
-          speak(data.botText);
         } catch(err) {
           console.error(err);
         }
