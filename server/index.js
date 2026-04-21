@@ -134,7 +134,7 @@ async function getOrCreateChat(userId, module = 'general', chatId = null) {
 
         // Ensure the user exists in patients table so foreign keys don't fail (for Admins testing)
         try {
-            await connection.execute('INSERT IGNORE INTO patients (patient_id, fullname, email) SELECT auth_id, email, email FROM authentication WHERE auth_id = ?', [userId]);
+            await connection.execute('INSERT IGNORE INTO patients (patient_id, fullname, age, gender, email, password) SELECT auth_id, email, 0, "Other", email, password FROM authentication WHERE auth_id = ?', [userId]);
         } catch (e) { /* ignore */ }
 
         // 1. Insert into base chats table
