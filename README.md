@@ -6,7 +6,7 @@ InnerBloom is a professional mental health chat application and admin management
 
 - **Professional UI/UX**: Modern symmetric design with glassmorphism aesthetic and a premium dark-themed sidebar.
 - **Unified Mental Health Chat & Voice**: Specialized modules for Anxiety, Depression, and General support. The application features seamless Speech-to-Text (STT) parsing using Whisper—treating voice recordings identically to text sequences so that conversation contexts and diagnostic modules remain perfectly intact.
-- **AI Face & Mood Tracker**: Live TensorFlow.js mood scanning and sentiment analysis.
+- **AI Face and Mood Tracker**: Live TensorFlow.js mood scanning and sentiment analysis.
 - **Admin Control Center**: Comprehensive dashboard for monitoring user activity, mood logs, and managing registrations. Admins are empowered to test all user chat functionality dynamically without database errors.
 - **Secure Authentication**: ROLE-based access control (Admin/User) and Route locking. 
 
