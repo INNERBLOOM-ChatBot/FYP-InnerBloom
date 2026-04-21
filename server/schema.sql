@@ -294,7 +294,7 @@ CREATE TABLE `messages` (
   `phobias_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `chat_id` (`chat_id`),
-  CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`chat_id`) REFERENCES `chats_old` (`id`) ON DELETE CASCADE
+  CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`chat_id`) REFERENCES `chats` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
